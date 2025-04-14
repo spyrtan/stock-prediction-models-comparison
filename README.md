@@ -11,8 +11,6 @@ This folder contains the raw and processed data used in model training.
 - **`raw/`** – Contains data directly obtained from external sources (e.g., Yahoo Finance API, web scraping, etc.). You can find files in formats like `.csv`, `.json`, or `.pickle` here.
   
 - **`processed/`** – Contains the data that has been cleaned and transformed to be ready for training models. This includes normalized data, feature engineering, and time-series processing.
-  
-  Files here can be in `.csv`, `.json`, or preprocessed formats like `.pickle` or `.numpy`.
 
 ## `models/`
 In this folder, we save the trained models to avoid retraining them every time. This makes it easier to use a pre-trained model without repeating the training process.
@@ -24,11 +22,11 @@ Examples of files that might go here:
 - `arima_model.pkl` (Pickle file for ARIMA model)
 
 ## `notebooks/`
-This directory is for experimental work in Jupyter notebooks. You can use it to try out preprocessing steps, visualizations, and various analysis techniques.
+This directory is for experimental work in Jupyter notebooks.
 
 A typical file in this folder could be:
 
-- **`EDA.ipynb`** – For Exploratory Data Analysis, where you examine the data, visualize it, and start thinking about feature engineering.
+- **`EDA.ipynb`** – For Exploratory Data Analysis
 
 ## `src/`
 This folder contains the main logic of the project, with Python scripts for preprocessing, training, evaluating, and saving models.
@@ -50,19 +48,14 @@ This folder contains the main logic of the project, with Python scripts for prep
   - MAE (Mean Absolute Error)
   - R² (R-squared)
 
-  It can also generate visualizations, such as **True vs Predicted** plots.  
-  You might also have a function like `save_results(model_name, metrics, plot)` to save the evaluation results.
-
 ## `results/`
 This folder holds the outputs and results of the project, including:
 - **Tables** comparing model performances (e.g., `.csv`).
 - **Charts** and **plots** (e.g., `.png` files).
 - **Metric reports** and analyses.
 
-It may also include a **`report.md`** that summarizes the findings and conclusions.
-
 ## `main.py`
-The entry point of the project. Here you can integrate the logic from all scripts and execute the entire pipeline, such as:
+The entry point of the project:
 - Loading and preparing data
 - Training the models
 - Evaluating results
