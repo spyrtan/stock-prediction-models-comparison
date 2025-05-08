@@ -5,77 +5,75 @@ from src import save_data
 from src.load_data import load_data
 import pandas as pd
 import numpy as np
+import subprocess
+import sys
+
+def ensure_data_exists(ticker):
+    processed_dir = Path("data") / "processed" / ticker
+    required_files = ["X_train.npy", "y_train.npy", "X_test.npy", "y_test.npy"]
+    if not all((processed_dir / f).exists() for f in required_files):
+        print(f"\n⚠️ Dane dla {ticker} nie są gotowe.")
+        method = input("📥 Wczytać dane z pliku [C] czy pobrać z internetu [Y]? ").strip().upper()
+        if method == "C":
+            try:
+                df = load_data(ticker)
+                print(f"✅ Dane z pliku CSV dla {ticker} załadowane.")
+                print(df.head())
+            except Exception as e:
+                print(f"❌ Błąd: {e}")
+                sys.exit(1)
+        elif method == "Y":
+            start = input("📅 Start date (YYYY-MM-DD): ")
+            end = input("📅 End date (YYYY-MM-DD): ")
+            interval = input("⏱️ Interval (e.g. 1d, 1wk, 1mo): ")
+            window_size = int(input("🔁 Window size (e.g. 30): "))
+
+            try:
+                X_train, y_train, X_test, y_test, scaler, series = preprocess.prepare_data(
+                    ticker=ticker,
+                    start=start,
+                    end=end,
+                    interval=interval,
+                    window_size=window_size
+                )
+                save_data.save_raw_data(series, ticker)
+                save_data.save_processed_data(X_train, y_train, X_test, y_test, ticker)
+            except Exception as e:
+                print(f"❌ Błąd: {e}")
+                sys.exit(1)
+        else:
+            print("❌ Niepoprawny wybór. Kończę.")
+            sys.exit(1)
+
 
 def main():
-    print("=== Stock Data Loader ===")
-    print("[1] Load data from raw CSV")
-    print("[2] Download data from Yahoo Finance")
+    print("=== Stock Project CLI ===")
+    print("[1] Train all models")
+    print("[2] Evaluate all models")
+    print("[3] Predict using selected model")
     choice = input("🔢 Your choice: ")
 
     BASE_DIR = Path(__file__).resolve().parent
-    RAW_DATA_DIR = BASE_DIR / "data" / "raw"
+    ticker = input("📈 Enter stock ticker (e.g. AAPL): ").upper()
+    os.environ["TICKER"] = ticker
 
     if choice == "1":
-        ticker = input("📈 Enter stock ticker (e.g. AAPL): ").upper()
-        try:
-            df = load_data(ticker)
-            print(f"\n✅ Successfully loaded raw data for {ticker}")
-            print(df.head())
-        except Exception as e:
-            print(f"\n❌ Error occurred while loading CSV: {e}")
+        ensure_data_exists(ticker)
+        print("\n🚀 Training all models...\n")
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "train.py")])
 
     elif choice == "2":
-        print("\n=== Stock Data Download & Preparation ===\n")
-        ticker = input("📈 Enter stock ticker (e.g. AAPL): ").upper()
-        start = input("📅 Start date (YYYY-MM-DD): ")
-        end = input("📅 End date (YYYY-MM-DD): ")
-        interval = input("⏱️ Interval (e.g. 1d, 1wk, 1mo): ")
-        window_size = int(input("🔁 Window size (e.g. 30): "))
+        ensure_data_exists(ticker)
+        print("\n📊 Evaluating all models...\n")
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "evaluate.py")])
 
-        try:
-            X_train, y_train, X_test, y_test, scaler, series = preprocess.prepare_data(
-                ticker=ticker,
-                start=start,
-                end=end,
-                interval=interval,
-                window_size=window_size
-            )
-
-            print("\n✅ Data successfully downloaded and prepared.")
-            print(f"🔹 X_train shape: {X_train.shape}")
-            print(f"🔹 y_train shape: {y_train.shape}")
-            print(f"🔹 X_test shape: {X_test.shape}")
-            print(f"🔹 y_test shape: {y_test.shape}")
-
-            # Zapisz dane raw
-            if isinstance(series, pd.Series):
-                df = series.to_frame(name="Close")
-            elif isinstance(series, pd.DataFrame):
-                df = series.copy()
-            elif isinstance(series, np.ndarray):
-                df = pd.DataFrame(series, columns=["Close"])
-            else:
-                raise ValueError(f"Unsupported data format for saving raw data. Type: {type(series)}")
-
-            if df.empty:
-                print("❌ No data to save. Raw data is empty.")
-            else:
-                RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
-                file_name = f"{ticker}_raw.csv"
-                full_path = RAW_DATA_DIR / file_name
-                df.to_csv(full_path, index=False)
-                print("✅ Raw data saved!")
-                print(f"📄 File name: {file_name}")
-                print(f"📂 Full path: {full_path}")
-
-            # Zapisz dane przetworzone
-            save_data.save_processed_data(X_train, y_train, X_test, y_test, ticker)
-
-        except Exception as e:
-            print(f"\n❌ Error occurred: {e}")
+    elif choice == "3":
+        ensure_data_exists(ticker)
+        print("\n🔮 Predykcja (do zrobienia)...")
+        # tutaj później dodamy kod do predykcji
 
     else:
-        print("⚠️ Invalid choice. Please select 1 or 2.")
+        print("⚠️ Invalid choice. Please select 1, 2 or 3.")
 
 if __name__ == "__main__":
     main()
