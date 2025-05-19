@@ -15,18 +15,38 @@ os.makedirs(PROCESSED_DIR, exist_ok=True)
 
 def save_raw_data(data, ticker):
     """
-    Save raw time series data (from Yahoo Finance) to a CSV file.
+    Save cleaned raw time series data (from Yahoo Finance) to a CSV file.
+    Only 'Date' and 'Close' columns are retained. Strips MultiIndex and non-numeric rows.
     """
     if isinstance(data, pd.Series):
         df = data.to_frame(name="Close")
     elif isinstance(data, pd.DataFrame):
-        df = data
+        df = data.copy()
     else:
         raise ValueError("Unsupported data format for saving raw data.")
 
+    # Flatten MultiIndex columns if needed
+    if isinstance(df.columns, pd.MultiIndex):
+        if "Close" in df.columns.get_level_values(0):
+            df.columns = df.columns.get_level_values(0)
+
+    # Reset index if necessary
+    if df.index.name == "Date" or df.index.name is None:
+        df = df.reset_index()
+
+    # Keep only 'Date' and 'Close', force numeric type, drop NaNs
+    if "Date" in df.columns and "Close" in df.columns:
+        df = df[["Date", "Close"]]
+        df = df[pd.to_numeric(df["Close"], errors="coerce").notnull()]
+        df["Close"] = df["Close"].astype(float)
+    else:
+        raise ValueError("Expected columns 'Date' and 'Close' not found in data.")
+
+    df = df.dropna()
+
     file_name = f"{ticker}_raw.csv"
     file_path = os.path.join(RAW_DIR, file_name)
-    df.to_csv(file_path)
+    df.to_csv(file_path, index=False)
 
     print("✅ Raw data saved!")
     print(f"📄 File name: {file_name}")

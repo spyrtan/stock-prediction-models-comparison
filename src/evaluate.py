@@ -44,10 +44,10 @@ if os.path.exists(arima_pred_path):
 else:
     results['ARIMA'] = None
 
-# === Wyświetlenie wyników ===
-print("\n📊 Wyniki ewaluacji (MSE):")
+# === Display results ===
+print("\n📊 Model Evaluation Results (MSE):")
 for model, mse in results.items():
     if mse is not None:
         print(f"{model:12s} → MSE: {mse:.6f}")
     else:
-        print(f"{model:12s} → brak danych")
+        print(f"{model:12s} → no data available")

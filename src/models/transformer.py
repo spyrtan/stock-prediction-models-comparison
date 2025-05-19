@@ -8,13 +8,13 @@ DATA_DIR = os.path.join("data", "processed", TICKER)
 MODEL_DIR = "models"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-# Załaduj dane
+# Load data
 X_train = np.load(os.path.join(DATA_DIR, "X_train.npy"))
 y_train = np.load(os.path.join(DATA_DIR, "y_train.npy"))
 X_test = np.load(os.path.join(DATA_DIR, "X_test.npy"))
 y_test = np.load(os.path.join(DATA_DIR, "y_test.npy"))
 
-# Parametry wejściowe
+# Input shape
 input_shape = X_train.shape[1:]
 
 def transformer_encoder(inputs, head_size, num_heads, ff_dim, dropout=0):
@@ -37,19 +37,19 @@ def build_model(input_shape):
     outputs = layers.Dense(1)(x)
     return models.Model(inputs, outputs)
 
-# Budowa i kompilacja modelu
+# Build and compile the model
 model = build_model(input_shape)
 model.compile(loss="mse", optimizer="adam")
 
-# Trening
-print("\n🚀 Start treningu Transformera...")
+# Training
+print("\n🚀 Starting Transformer training...")
 history = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=20, batch_size=32)
 
-# Ewaluacja
+# Evaluation
 mse = model.evaluate(X_test, y_test)
 print(f"\n📉 Test MSE: {mse}")
 
-# Zapis modelu (nowoczesny format .keras)
+# Save model in modern .keras format
 MODEL_PATH = os.path.join(MODEL_DIR, f"{TICKER}_transformer_model.keras")
 model.save(MODEL_PATH)
-print(f"💾 Model zapisany do {MODEL_PATH}")
+print(f"💾 Model saved to {MODEL_PATH}")

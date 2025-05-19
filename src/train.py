@@ -2,10 +2,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Ścieżka do folderu src
+# Path to the src folder
 BASE_DIR = Path(__file__).resolve().parent
 
-# Lista dostępnych skryptów do trenowania (w src/models/)
+# List of available training scripts (inside src/models/)
 scripts = [
     ("LSTM", BASE_DIR / "models" / "lstm_model.py"),
     ("CNN", BASE_DIR / "models" / "cnn_model.py"),
@@ -14,13 +14,13 @@ scripts = [
     ("XGBoost", BASE_DIR / "models" / "xgboost_model.py")
 ]
 
-print("\n🚀 Uruchamianie treningów modeli:\n")
+print("\n🚀 Starting model training:\n")
 
 for name, script_path in scripts:
     print(f"\n================ {name} =================")
     try:
         subprocess.run([sys.executable, str(script_path)], check=True)
     except subprocess.CalledProcessError:
-        print(f"❌ Wystąpił błąd podczas uruchamiania {script_path.name}")
+        print(f"❌ Error while running {script_path.name}")
 
-print("\n✅ Wszystkie modele zostały przetrenowane (o ile nie było błędów).")
+print("\n✅ All models have been trained (unless an error occurred).")

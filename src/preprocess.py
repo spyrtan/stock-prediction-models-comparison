@@ -3,6 +3,12 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 
 def prepare_data(ticker, start, end, interval="1d", window_size=30):
+    """
+    Download and preprocess historical stock price data using a sliding window approach.
+
+    Returns:
+        X_train, y_train, X_test, y_test, scaler, original DataFrame (df)
+    """
     df = yf.download(ticker, start=start, end=end, interval=interval)
 
     if df.empty:
@@ -25,9 +31,17 @@ def prepare_data(ticker, start, end, interval="1d", window_size=30):
     X_train, y_train = X[:split_index], y[:split_index]
     X_test, y_test = X[split_index:], y[split_index:]
 
-    return X_train, y_train, X_test, y_test, scaler, df  # <--- ZWRACA CAŁY df
+    # Returns training/testing data, scaler, and full original DataFrame
+    return X_train, y_train, X_test, y_test, scaler, df
 
 def prepare_from_series(close_prices, window_size=30):
+    """
+    Preprocess a given series of closing prices (without downloading),
+    using a sliding window approach.
+
+    Returns:
+        X_train, y_train, X_test, y_test, scaler
+    """
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(close_prices)
 
