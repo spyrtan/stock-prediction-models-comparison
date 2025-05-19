@@ -75,6 +75,13 @@ def main():
         save_data.save_raw_data(df, ticker)
         print("✅ Data saved to data/raw/")
 
+        # Preprocess and save to processed/
+        from src.preprocess import prepare_from_series
+        close_prices = df["Close"].values.reshape(-1, 1)
+        X_train, y_train, X_test, y_test, scaler = prepare_from_series(close_prices, window_size=30)
+        save_data.save_processed_data(X_train, y_train, X_test, y_test, ticker)
+        print("✅ Processed data saved to data/processed/")
+
     elif choice == "2":
         ensure_data_exists(ticker)
         print("\n🚀 Training all models...\n")
