@@ -9,6 +9,9 @@ import xgboost as xgb
 from statsmodels.tsa.arima.model import ARIMA
 
 def predict_next(model_name: str, ticker: str) -> float:
+    """
+    Fetches the latest stock data, prepares input, loads the specified model, and returns the prediction.
+    """
     try:
         print(f"📡 Downloading last 5 years of data for {ticker}...")
         end = datetime.today()
@@ -23,7 +26,7 @@ def predict_next(model_name: str, ticker: str) -> float:
         df = df.sort_values("Date")
         print("✅ Data successfully fetched from the internet.")
     except:
-        print("⚠️ Failed to fetch data — using local raw backup.")
+        print("⚠️ Failed to fetch data — using local backup.")
         raw_path = os.path.join("data", "raw", f"{ticker}_raw.csv")
         df = pd.read_csv(raw_path)
         df["Date"] = pd.to_datetime(df["Date"])
@@ -36,7 +39,7 @@ def predict_next(model_name: str, ticker: str) -> float:
 
     close_prices = df["Close"].values.reshape(-1, 1)
 
-    # Prepare latest input for prediction
+    # Prepare the latest input for prediction
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(close_prices)
 
@@ -81,3 +84,90 @@ def predict_next(model_name: str, ticker: str) -> float:
     pred_value = scaler.inverse_transform(pred_scaled)[0][0]
     print(f"📈 Forecast ({model_name}): {pred_value:.2f}")
     return float(pred_value)
+
+def save_prediction(ticker: str, model_name: str, predicted_value: float):
+    """
+    Saves the prediction to a CSV file named {model}_predictions.csv inside results/{ticker}/.
+    Each prediction is saved for the next available trading day after the last known date.
+    """
+    result_dir = os.path.join("results", ticker)
+    os.makedirs(result_dir, exist_ok=True)
+
+    # Load the last known date from local raw data
+    raw_path = os.path.join("data", "raw", f"{ticker}_raw.csv")
+    df = pd.read_csv(raw_path)
+    df["Date"] = pd.to_datetime(df["Date"])
+    last_known_date = df["Date"].max()
+
+    # Compute the next trading day (skip weekends)
+    next_day = last_known_date + timedelta(days=1)
+    while next_day.weekday() > 4:  # 5=Saturday, 6=Sunday
+        next_day += timedelta(days=1)
+    prediction_date = next_day.strftime("%Y-%m-%d")
+
+    result_file = os.path.join(result_dir, f"{model_name.lower()}_predictions.csv")
+
+    if os.path.exists(result_file):
+        df_pred = pd.read_csv(result_file)
+    else:
+        df_pred = pd.DataFrame(columns=["Date", "Prediction"])
+
+    # Overwrite any existing entry for that date
+    df_pred = df_pred[df_pred["Date"] != prediction_date]
+    df_pred = pd.concat([df_pred, pd.DataFrame([{"Date": prediction_date, "Prediction": predicted_value}])], ignore_index=True)
+
+    df_pred.sort_values("Date", inplace=True)
+    df_pred.to_csv(result_file, index=False)
+
+    return result_file
+
+def update_actuals(ticker: str, model_name: str):
+    """
+    Updates the actual closing prices for previously predicted dates and calculates prediction error.
+    """
+    import yfinance as yf
+
+    result_file = os.path.join("results", ticker, f"{model_name.lower()}_predictions.csv")
+    if not os.path.exists(result_file):
+        print("❌ Prediction file not found.")
+        return
+
+    df = pd.read_csv(result_file)
+    if "Actual" not in df.columns:
+        df["Actual"] = np.nan
+
+    print(f"📥 Updating actual closing prices for {ticker}...")
+
+    updated_count = 0
+
+    for i, row in df.iterrows():
+        date = row["Date"]
+        if not pd.isna(row["Actual"]):
+            continue
+
+        try:
+            hist = yf.download(ticker, start=date, end=date, interval="1d", progress=False)
+            if not hist.empty:
+                actual_close = hist["Close"].iloc[0]
+                df.at[i, "Actual"] = actual_close
+                updated_count += 1
+                print(f"✅ {date}: {actual_close}")
+            else:
+                print(f"⚠️ No data for {date}")
+        except Exception as e:
+            print(f"❌ Error fetching data for {date}: {e}")
+
+    # Compute prediction error (Prediction - Actual)
+    if "Error" not in df.columns:
+        df["Error"] = np.nan
+
+    df["Error"] = df.apply(
+        lambda row: row["Prediction"] - row["Actual"]
+        if not pd.isna(row["Prediction"]) and not pd.isna(row["Actual"]) else np.nan,
+        axis=1
+    )
+
+    df.to_csv(result_file, index=False)
+    print(f"\n💾 File updated: {result_file}")
+    if updated_count == 0:
+        print("ℹ️ No actual values were updated. Try again later.")

@@ -1,28 +1,32 @@
 import os
 from pathlib import Path
+from datetime import datetime
 from src import preprocess
 from src import save_data
 from src.load_data import load_data
-from src.predict import predict_next
+from src.predict import predict_next, save_prediction, update_actuals
 import pandas as pd
 import numpy as np
 import subprocess
 import sys
 
 def ensure_data_exists(ticker):
+    """
+    Checks if processed data exists for the given ticker. If not, prompts the user to load it.
+    """
     processed_dir = Path("data") / "processed" / ticker
     required_files = ["X_train.npy", "y_train.npy", "X_test.npy", "y_test.npy"]
     if not all((processed_dir / f).exists() for f in required_files):
-        print(f"\n⚠️ Data for {ticker} is not ready.")
-        method = input("📥 Load data from file [C] or fetch from the internet [Y]? ").strip().upper()
+        print(f"\n⚠️ Processed data for {ticker} not found.")
+        method = input("📥 Load from CSV file [C] or fetch from the internet [Y]? ").strip().upper()
         if method == "C":
             try:
                 df = load_data(ticker)
-                print(f"✅ Data loaded from CSV file for {ticker}.")
+                print(f"✅ Data loaded from local CSV for {ticker}.")
                 print(df.head())
             except Exception as e:
-                print(f"❌ Error: {e}")
-                sys.exit(1)
+                print(f"❌ Error loading file: {e}")
+                return False
         elif method == "Y":
             start = input("📅 Start date (YYYY-MM-DD): ")
             end = input("📅 End date (YYYY-MM-DD): ")
@@ -40,89 +44,135 @@ def ensure_data_exists(ticker):
                 save_data.save_raw_data(series, ticker)
                 save_data.save_processed_data(X_train, y_train, X_test, y_test, ticker)
             except Exception as e:
-                print(f"❌ Error: {e}")
-                sys.exit(1)
+                print(f"❌ Error while preparing data: {e}")
+                return False
         else:
-            print("❌ Invalid option. Exiting.")
-            sys.exit(1)
+            print("❌ Invalid option. Returning to menu.")
+            return False
+    return True
 
 def main():
-    print("=== Stock Project CLI ===")
-    print("[1] Download last 5 years of data and save as raw")
-    print("[2] Train all models")
-    print("[3] Evaluate all models")
-    print("[4] Predict using selected model")
-    choice = input("🔢 Your choice: ")
-
     BASE_DIR = Path(__file__).resolve().parent
-    ticker = input("📈 Enter stock ticker (e.g. AAPL): ").upper()
-    os.environ["TICKER"] = ticker
 
-    if choice == "1":
-        print(f"\n📦 Downloading {ticker} data for the last 5 years...")
-        from datetime import datetime, timedelta
-        import yfinance as yf
+    while True:
+        print("\n🧠 === STOCK PREDICTION CLI ===")
+        print("📅 Current time:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-        end = datetime.today()
-        start = end - timedelta(days=5*365)
+        print("\n📁 Data management:")
+        print(" [1] Download data        → Fetch last 5 years of data from Yahoo Finance")
+        print(" [2] Train models         → Train all models on processed data")
+        print(" [3] Evaluate models      → Calculate MSE for each model")
 
-        df = yf.download(ticker, start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"), interval="1d")
+        print("\n🔮 Prediction & analysis:")
+        print(" [4] Make prediction      → Predict next day’s closing price")
+        print(" [5] Update actual prices → Fill in real prices for saved predictions")
 
-        if df.empty:
-            print("❌ Failed to fetch data.")
-            sys.exit(1)
+        print("\n❌ Exit:")
+        print(" [Q] Quit program")
 
-        save_data.save_raw_data(df, ticker)
-        print("✅ Data saved to data/raw/")
+        choice = input("\n🔢 Your choice: ").strip().upper()
 
-        # Preprocess and save to processed/
-        from src.preprocess import prepare_from_series
-        close_prices = df["Close"].values.reshape(-1, 1)
-        X_train, y_train, X_test, y_test, scaler = prepare_from_series(close_prices, window_size=30)
-        save_data.save_processed_data(X_train, y_train, X_test, y_test, ticker)
-        print("✅ Processed data saved to data/processed/")
+        if choice == "Q":
+            print("👋 Exiting the program. Goodbye!")
+            break
 
-    elif choice == "2":
-        ensure_data_exists(ticker)
-        print("\n🚀 Training all models...\n")
-        subprocess.run([sys.executable, str(BASE_DIR / "src" / "train.py")])
+        if choice not in ["1", "2", "3", "4", "5"]:
+            print("⚠️ Invalid option. Please choose between 1–5 or Q.")
+            continue
 
-    elif choice == "3":
-        ensure_data_exists(ticker)
-        print("\n📊 Evaluating all models...\n")
-        subprocess.run([sys.executable, str(BASE_DIR / "src" / "evaluate.py")])
+        ticker = input("📈 Enter stock ticker (e.g. AAPL): ").upper()
+        os.environ["TICKER"] = ticker
 
-    elif choice == "4":
-        print("\n📊 Select model for prediction:")
-        print("[1] LSTM")
-        print("[2] CNN")
-        print("[3] Transformer")
-        print("[4] XGBoost")
-        print("[5] ARIMA")
-        model_choice = input("🔢 Your choice: ")
+        if choice == "1":
+            print(f"\n📦 Downloading {ticker} data for the last 5 years...")
+            from datetime import timedelta
+            import yfinance as yf
 
-        model_map = {
-            "1": "LSTM",
-            "2": "CNN",
-            "3": "Transformer",
-            "4": "XGBoost",
-            "5": "ARIMA"
-        }
+            end = datetime.today()
+            start = end - timedelta(days=5 * 365)
 
-        if model_choice not in model_map:
-            print("❌ Invalid model selection.")
-            sys.exit(1)
+            df = yf.download(ticker, start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"), interval="1d")
 
-        model_name = model_map[model_choice]
+            if df.empty:
+                print("❌ Failed to fetch data from Yahoo Finance.")
+                continue
 
-        try:
-            predicted_value = predict_next(model_name, ticker)
-            print(f"\n🎯 Predicted closing price for next day using {model_name}: {predicted_value:.2f}")
-        except Exception as e:
-            print(f"❌ Prediction error: {e}")
+            save_data.save_raw_data(df, ticker)
+            print("✅ Raw data saved to data/raw/")
 
-    else:
-        print("⚠️ Invalid choice. Please select 1, 2, 3 or 4.")
+            from src.preprocess import prepare_from_series
+            close_prices = df["Close"].values.reshape(-1, 1)
+            X_train, y_train, X_test, y_test, scaler = prepare_from_series(close_prices, window_size=30)
+            save_data.save_processed_data(X_train, y_train, X_test, y_test, ticker)
+            print("✅ Processed data saved to data/processed/")
+
+        elif choice == "2":
+            if ensure_data_exists(ticker):
+                print("\n🚀 Starting model training...\n")
+                subprocess.run([sys.executable, str(BASE_DIR / "src" / "train.py")])
+
+        elif choice == "3":
+            if ensure_data_exists(ticker):
+                print("\n📊 Evaluating all models...\n")
+                subprocess.run([sys.executable, str(BASE_DIR / "src" / "evaluate.py")])
+
+        elif choice == "4":
+            print("\n🤖 Choose prediction model:")
+            print(" [1] LSTM         → Long Short-Term Memory")
+            print(" [2] CNN          → Convolutional Neural Network")
+            print(" [3] Transformer  → Attention-based model")
+            print(" [4] XGBoost      → Gradient boosting")
+            print(" [5] ARIMA        → Autoregressive model")
+
+            model_choice = input("🔢 Your choice: ").strip()
+
+            model_map = {
+                "1": "LSTM",
+                "2": "CNN",
+                "3": "Transformer",
+                "4": "XGBoost",
+                "5": "ARIMA"
+            }
+
+            if model_choice not in model_map:
+                print("❌ Invalid model selection.")
+                continue
+
+            model_name = model_map[model_choice]
+
+            try:
+                predicted_value = predict_next(model_name, ticker)
+                print(f"\n🎯 Predicted closing price using {model_name}: {predicted_value:.2f}")
+                save = input("💾 Save prediction to file? (Y/N): ").strip().upper()
+                if save == "Y":
+                    path = save_prediction(ticker, model_name, predicted_value)
+                    print(f"✅ Prediction saved to: {path}")
+            except Exception as e:
+                print(f"❌ Prediction error: {e}")
+
+        elif choice == "5":
+            print("\n📊 Select model to update actual prices:")
+            print(" [1] LSTM")
+            print(" [2] CNN")
+            print(" [3] Transformer")
+            print(" [4] XGBoost")
+            print(" [5] ARIMA")
+            model_choice = input("🔢 Your choice: ").strip()
+
+            model_map = {
+                "1": "LSTM",
+                "2": "CNN",
+                "3": "Transformer",
+                "4": "XGBoost",
+                "5": "ARIMA"
+            }
+
+            if model_choice not in model_map:
+                print("❌ Invalid model selection.")
+                continue
+
+            model_name = model_map[model_choice]
+            update_actuals(ticker, model_name)
 
 if __name__ == "__main__":
     main()
