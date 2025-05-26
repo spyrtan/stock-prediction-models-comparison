@@ -108,8 +108,17 @@ def main():
 
         elif choice == "2":
             if ensure_data_exists(ticker):
-                print("\n🚀 Starting model training...\n")
-                subprocess.run([sys.executable, str(BASE_DIR / "src" / "train.py")])
+                try:
+                    repeat = int(input("🔁 How many times should each model be trained? (default: 1): ") or "1")
+                    if repeat < 1:
+                        raise ValueError
+                except ValueError:
+                    print("⚠️ Invalid number. Using default value: 1")
+                    repeat = 1
+
+                os.environ["TRAIN_REPEAT"] = str(repeat)
+                print(f"\n🚀 Starting training ({repeat}x per model)...\n")
+                subprocess.run([sys.executable, str(BASE_DIR / "src" / "train.py")], env=os.environ.copy())
 
         elif choice == "3":
             if ensure_data_exists(ticker):

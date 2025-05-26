@@ -1,34 +1,63 @@
+import sys
+if sys.stdout.encoding != "utf-8":
+    sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
+
 import numpy as np
 import xgboost as xgb
 import os
+import json
+from pathlib import Path
 from sklearn.metrics import mean_squared_error
 
+# Load environment variables
 TICKER = os.environ.get("TICKER", "AAPL")
-DATA_DIR = os.path.join("data", "processed", TICKER)
-MODEL_DIR = "models"
+SUFFIX = os.environ.get("MODEL_TEMP_SUFFIX", "")
+
+# Use absolute paths
+BASE_DIR = Path(__file__).resolve().parents[2]
+DATA_DIR = BASE_DIR / "data" / "processed" / TICKER
+MODEL_DIR = BASE_DIR / "models"
+TEMP_DIR = MODEL_DIR / "temp"
+
+# Ensure directories exist
 os.makedirs(MODEL_DIR, exist_ok=True)
+os.makedirs(TEMP_DIR, exist_ok=True)
 
-# Load data
-X_train = np.load(os.path.join(DATA_DIR, "X_train.npy"))
-y_train = np.load(os.path.join(DATA_DIR, "y_train.npy"))
-X_test = np.load(os.path.join(DATA_DIR, "X_test.npy"))
-y_test = np.load(os.path.join(DATA_DIR, "y_test.npy"))
+# Load preprocessed data
+X_train = np.load(DATA_DIR / "X_train.npy")
+y_train = np.load(DATA_DIR / "y_train.npy")
+X_test = np.load(DATA_DIR / "X_test.npy")
+y_test = np.load(DATA_DIR / "y_test.npy")
 
-# Flatten input (XGBoost does not support 3D input)
+# Flatten input (XGBoost requires 2D input)
 X_train_flat = X_train.reshape(X_train.shape[0], -1)
 X_test_flat = X_test.reshape(X_test.shape[0], -1)
 
-# Train the model
+# Train XGBoost model
 print("\n🚀 Starting XGBoost training...")
 model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=100)
 model.fit(X_train_flat, y_train)
 
-# Prediction and evaluation
-preds = model.predict(X_test_flat)
-mse = mean_squared_error(y_test, preds)
-print(f"\n📉 Test MSE: {mse}")
+# Predict and evaluate
+predictions = model.predict(X_test_flat)
+mse = mean_squared_error(y_test, predictions)
+print(f"\n📉 Test MSE: {mse:.6f}")
 
-# Save the model
-MODEL_PATH = os.path.join(MODEL_DIR, f"{TICKER}_xgboost_model.json")
-model.save_model(MODEL_PATH)
-print(f"💾 Model saved to {MODEL_PATH}")
+# Determine model save path
+model_filename = f"{TICKER}_xgboost_model{SUFFIX}.json"
+model_path = TEMP_DIR / model_filename if SUFFIX else MODEL_DIR / model_filename
+
+try:
+    model.save_model(model_path)
+    print(f"💾 Model saved to {model_path}")
+except Exception as e:
+    print(f"❌ Failed to save model: {e}")
+
+# Save MSE and model path to JSON
+mse_output_path = TEMP_DIR / "xgboost_mse.json"
+try:
+    with open(mse_output_path, "w") as f:
+        json.dump({"mse": mse, "model_path": str(model_path)}, f)
+    print(f"📄 MSE and model path written to {mse_output_path}")
+except Exception as e:
+    print(f"❌ Failed to write JSON: {e}")
