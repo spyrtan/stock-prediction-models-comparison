@@ -8,6 +8,17 @@ from tensorflow.keras.models import load_model
 import xgboost as xgb
 from statsmodels.tsa.arima.model import ARIMA
 
+def get_next_trading_day(start_date):
+    holidays_2025 = [
+        "2025-01-01", "2025-01-20", "2025-02-17", "2025-04-18", "2025-05-26",
+        "2025-06-19", "2025-07-04", "2025-09-01", "2025-11-27", "2025-12-25"
+    ]
+    holidays = pd.to_datetime(holidays_2025)
+    date = start_date + timedelta(days=1)
+    while date.weekday() >= 5 or date in holidays:
+        date += timedelta(days=1)
+    return date
+
 def predict_next(model_name: str, ticker: str) -> float:
     print(f"📡 Downloading last 5 years of data for {ticker}...")
     try:
@@ -48,7 +59,6 @@ def predict_next(model_name: str, ticker: str) -> float:
         print(f"📈 Forecast ({model_name}): {pred_value:.2f}")
         return float(pred_value)
 
-    # Models with scaling
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(close_prices)
     X_latest = np.array([scaled_data[-window_size:]])
@@ -66,7 +76,7 @@ def predict_next(model_name: str, ticker: str) -> float:
         pred_scaled = model.predict(X_latest)
 
     elif model_name == "XGBoost":
-        model = xgboost.XGBRegressor()
+        model = xgb.XGBRegressor()
         model.load_model(os.path.join(model_dir, f"{ticker}_xgboost_model.json"))
         X_flat = X_latest.reshape(X_latest.shape[0], -1)
         pred_scaled = model.predict(X_flat).reshape(-1, 1)
@@ -78,7 +88,6 @@ def predict_next(model_name: str, ticker: str) -> float:
     print(f"📈 Forecast ({model_name}): {pred_value:.2f}")
     return float(pred_value)
 
-
 def save_prediction(ticker: str, model_name: str, predicted_value: float):
     result_dir = os.path.join("results", ticker)
     os.makedirs(result_dir, exist_ok=True)
@@ -88,9 +97,7 @@ def save_prediction(ticker: str, model_name: str, predicted_value: float):
     df["Date"] = pd.to_datetime(df["Date"])
     last_known_date = df["Date"].max()
 
-    next_day = last_known_date + timedelta(days=1)
-    while next_day.weekday() > 4:
-        next_day += timedelta(days=1)
+    next_day = get_next_trading_day(last_known_date)
     prediction_date = next_day.strftime("%Y-%m-%d")
 
     result_file = os.path.join(result_dir, f"{model_name.lower()}_predictions.csv")
@@ -109,10 +116,7 @@ def save_prediction(ticker: str, model_name: str, predicted_value: float):
 
     return result_file
 
-
 def update_actuals(ticker: str, model_name: str):
-    import yfinance as yf
-
     result_file = os.path.join("results", ticker, f"{model_name.lower()}_predictions.csv")
     if not os.path.exists(result_file):
         print("❌ Prediction file not found.")
@@ -122,24 +126,30 @@ def update_actuals(ticker: str, model_name: str):
     if "Actual" not in df.columns:
         df["Actual"] = np.nan
 
-    print(f"📥 Updating actual closing prices for {ticker}...")
+    raw_path = os.path.join("data", "raw", f"{ticker}_raw.csv")
+    if not os.path.exists(raw_path):
+        print("❌ Local raw data file not found.")
+        return
+
+    raw_df = pd.read_csv(raw_path)
+    raw_df["Date"] = pd.to_datetime(raw_df["Date"])
+    raw_df = raw_df.set_index("Date")
+
+    print(f"📥 Updating actual closing prices for {ticker} from local data...")
     updated = 0
 
     for i, row in df.iterrows():
-        date = row["Date"]
+        date = pd.to_datetime(row["Date"])
         if not pd.isna(row["Actual"]):
             continue
 
         try:
-            hist = yf.download(ticker, start=date, end=date, interval="1d", progress=False)
-            if not hist.empty:
-                df.at[i, "Actual"] = hist["Close"].iloc[0]
-                updated += 1
-                print(f"✅ {date}: {hist['Close'].iloc[0]}")
-            else:
-                print(f"⚠️ No data for {date}")
-        except Exception as e:
-            print(f"❌ Error fetching {date}: {e}")
+            actual_price = raw_df.loc[date, "Close"]
+            df.at[i, "Actual"] = actual_price
+            updated += 1
+            print(f"✅ {date.date()}: {actual_price}")
+        except KeyError:
+            print(f"⚠️ No data for {date.date()} in raw CSV.")
 
     df["Error"] = df.apply(
         lambda row: row["Prediction"] - row["Actual"]
@@ -147,6 +157,6 @@ def update_actuals(ticker: str, model_name: str):
         axis=1
     )
     df.to_csv(result_file, index=False)
-    print(f"\n💾 File updated: {result_file}")
+    print(f"💾 File updated: {result_file}")
     if updated == 0:
-        print("ℹ️ No actual values were updated. Try again later.")
+        print("ℹ️ No actual values were updated. Check if raw data contains matching dates.")
