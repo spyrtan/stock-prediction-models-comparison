@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import xgboost as xgb
 from tensorflow.keras.models import load_model
 
@@ -20,7 +20,12 @@ results = {}
 try:
     lstm_model = load_model(os.path.join(MODEL_DIR, f"{TICKER}_lstm_model.keras"))
     y_pred = lstm_model.predict(X_test)
-    results['LSTM'] = mean_squared_error(y_test, y_pred)
+    results['LSTM'] = {
+        "MSE": mean_squared_error(y_test, y_pred),
+        "MAE": mean_absolute_error(y_test, y_pred),
+        "R2": r2_score(y_test, y_pred),
+        "MAPE": np.mean(np.abs((y_test - y_pred.flatten()) / y_test)) * 100
+    }
 except Exception as e:
     results['LSTM'] = None
     print(f"⚠️ LSTM error: {e}")
@@ -29,7 +34,12 @@ except Exception as e:
 try:
     cnn_model = load_model(os.path.join(MODEL_DIR, f"{TICKER}_cnn_model.keras"))
     y_pred = cnn_model.predict(X_test)
-    results['CNN'] = mean_squared_error(y_test, y_pred)
+    results['CNN'] = {
+        "MSE": mean_squared_error(y_test, y_pred),
+        "MAE": mean_absolute_error(y_test, y_pred),
+        "R2": r2_score(y_test, y_pred),
+        "MAPE": np.mean(np.abs((y_test - y_pred.flatten()) / y_test)) * 100
+    }
 except Exception as e:
     results['CNN'] = None
     print(f"⚠️ CNN error: {e}")
@@ -38,7 +48,12 @@ except Exception as e:
 try:
     transformer_model = load_model(os.path.join(MODEL_DIR, f"{TICKER}_transformer_model.keras"))
     y_pred = transformer_model.predict(X_test)
-    results['Transformer'] = mean_squared_error(y_test, y_pred)
+    results['Transformer'] = {
+        "MSE": mean_squared_error(y_test, y_pred),
+        "MAE": mean_absolute_error(y_test, y_pred),
+        "R2": r2_score(y_test, y_pred),
+        "MAPE": np.mean(np.abs((y_test - y_pred.flatten()) / y_test)) * 100
+    }
 except Exception as e:
     results['Transformer'] = None
     print(f"⚠️ Transformer error: {e}")
@@ -49,28 +64,45 @@ try:
     xgb_model.load_model(os.path.join(MODEL_DIR, f"{TICKER}_xgboost_model.json"))
     X_test_flat = X_test.reshape(X_test.shape[0], -1)
     y_pred = xgb_model.predict(X_test_flat)
-    results['XGBoost'] = mean_squared_error(y_test, y_pred)
+    results['XGBoost'] = {
+        "MSE": mean_squared_error(y_test, y_pred),
+        "MAE": mean_absolute_error(y_test, y_pred),
+        "R2": r2_score(y_test, y_pred),
+        "MAPE": np.mean(np.abs((y_test - y_pred) / y_test)) * 100
+    }
 except Exception as e:
     results['XGBoost'] = None
     print(f"⚠️ XGBoost error: {e}")
 
 # === ARIMA ===
 try:
-    arima_path = os.path.join(MODEL_DIR, f"{TICKER}_arima_model.csv")
+    arima_path = os.path.join(MODEL_DIR, f"{TICKER}_arima_predictions.csv")
+    if not os.path.exists(arima_path):
+        arima_path = os.path.join(MODEL_DIR, "temp", f"{TICKER}_arima_predictions__temp_run_1.csv")
+
     if os.path.exists(arima_path):
         arima_df = pd.read_csv(arima_path)
-        results['ARIMA'] = mean_squared_error(arima_df['actual'], arima_df['predicted'])
+        actual = arima_df["actual"].values
+        predicted = arima_df["predicted"].values
+        results['ARIMA'] = {
+            "MSE": mean_squared_error(actual, predicted),
+            "MAE": mean_absolute_error(actual, predicted),
+            "R2": r2_score(actual, predicted),
+            "MAPE": np.mean(np.abs((actual - predicted) / actual)) * 100
+        }
     else:
         results['ARIMA'] = None
-        print("⚠️ ARIMA predictions file not found.")
+        print("⚠️ ARIMA prediction CSV not found.")
 except Exception as e:
     results['ARIMA'] = None
     print(f"⚠️ ARIMA error: {e}")
 
 # === Display results ===
-print("\n📊 Model Evaluation Results (MSE):")
-for model, mse in results.items():
-    if mse is not None:
-        print(f"{model:12s} → MSE: {mse:.6f}")
+print("\n📊 Model Evaluation Results:")
+for model, metrics in results.items():
+    if metrics is not None:
+        print(f"\n🔍 {model}")
+        for key, value in metrics.items():
+            print(f"   {key}: {value:.6f}")
     else:
-        print(f"{model:12s} → no data available")
+        print(f"\n🔍 {model}: no data available")

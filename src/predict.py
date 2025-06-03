@@ -6,7 +6,8 @@ from sklearn.preprocessing import MinMaxScaler
 from src import save_data
 from tensorflow.keras.models import load_model
 import xgboost as xgb
-from statsmodels.tsa.arima.model import ARIMA
+import joblib
+
 
 def get_next_trading_day(start_date):
     holidays_2025 = [
@@ -19,28 +20,14 @@ def get_next_trading_day(start_date):
         date += timedelta(days=1)
     return date
 
-def predict_next(model_name: str, ticker: str) -> float:
-    print(f"📡 Downloading last 5 years of data for {ticker}...")
-    try:
-        end = datetime.today()
-        start = end - timedelta(days=5 * 365)
-        df = pd.read_csv(
-            f"https://query1.finance.yahoo.com/v7/finance/download/{ticker}?period1={int(start.timestamp())}&period2={int(end.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"
-        )
-        df = df[["Date", "Close"]].dropna()
-        df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
-        df["Date"] = pd.to_datetime(df["Date"])
-        df = df.dropna().sort_values("Date")
-        print("✅ Data successfully fetched from the internet.")
-    except Exception:
-        print("⚠️ Failed to fetch data — using local backup.")
-        raw_path = os.path.join("data", "raw", f"{ticker}_raw.csv")
-        df = pd.read_csv(raw_path)
-        df["Date"] = pd.to_datetime(df["Date"])
-        df = df.sort_values("Date")
-        df = df[["Date", "Close"]].dropna()
-        df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
 
+def predict_next(model_name: str, ticker: str) -> float:
+    raw_path = os.path.join("data", "raw", f"{ticker}_raw.csv")
+    df = pd.read_csv(raw_path)
+    df["Date"] = pd.to_datetime(df["Date"])
+    df = df.sort_values("Date")
+    df = df[["Date", "Close"]].dropna()
+    df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
     save_data.save_raw_data(df, ticker)
 
     close_prices = df["Close"].values.reshape(-1, 1)
@@ -52,10 +39,13 @@ def predict_next(model_name: str, ticker: str) -> float:
     model_dir = "models"
 
     if model_name == "ARIMA":
-        series = df["Close"].dropna()
-        model = ARIMA(series, order=(5, 1, 0))
-        model_fit = model.fit()
-        pred_value = model_fit.forecast(steps=1)[0]
+        log_series = np.log(df["Close"].values)
+        model_path = os.path.join(model_dir, f"{ticker}_arima_model.pkl")
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"ARIMA model file not found at {model_path}")
+        model = joblib.load(model_path)
+        pred_log = model.predict(n_periods=1)[0]
+        pred_value = np.exp(pred_log)
         print(f"📈 Forecast ({model_name}): {pred_value:.2f}")
         return float(pred_value)
 
@@ -88,6 +78,7 @@ def predict_next(model_name: str, ticker: str) -> float:
     print(f"📈 Forecast ({model_name}): {pred_value:.2f}")
     return float(pred_value)
 
+
 def save_prediction(ticker: str, model_name: str, predicted_value: float):
     result_dir = os.path.join("results", ticker)
     os.makedirs(result_dir, exist_ok=True)
@@ -115,6 +106,7 @@ def save_prediction(ticker: str, model_name: str, predicted_value: float):
     df_pred.to_csv(result_file, index=False)
 
     return result_file
+
 
 def update_actuals(ticker: str, model_name: str):
     result_file = os.path.join("results", ticker, f"{model_name.lower()}_predictions.csv")
