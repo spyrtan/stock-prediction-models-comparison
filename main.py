@@ -11,9 +11,6 @@ import subprocess
 import sys
 
 def ensure_data_exists(ticker):
-    """
-    Checks if processed data exists for the given ticker. If not, prompts the user to load it.
-    """
     processed_dir = Path("data") / "processed" / ticker
     required_files = ["X_train.npy", "y_train.npy", "X_test.npy", "y_test.npy"]
     if not all((processed_dir / f).exists() for f in required_files):
@@ -60,7 +57,7 @@ def main():
 
         print("\n📁 Data management:")
         print(" [1] Download data        → Fetch last 5 years of data from Yahoo Finance")
-        print(" [2] Train models         → Train all models on processed data")
+        print(" [2] Train models         → Train all or selected models on processed data")
         print(" [3] Evaluate models      → Calculate MSE for each model")
 
         print("\n🔮 Prediction & analysis:")
@@ -108,6 +105,15 @@ def main():
 
         elif choice == "2":
             if ensure_data_exists(ticker):
+                print("\n🎯 Select training mode:")
+                print(" [1] Train all models")
+                print(" [2] Train selected models only")
+
+                sub_choice = input("🔢 Your choice: ").strip()
+                if sub_choice not in ["1", "2"]:
+                    print("⚠️ Invalid option.")
+                    return
+
                 try:
                     repeat = int(input("🔁 How many times should each model be trained? (default: 1): ") or "1")
                     if repeat < 1:
@@ -117,7 +123,34 @@ def main():
                     repeat = 1
 
                 os.environ["TRAIN_REPEAT"] = str(repeat)
-                print(f"\n🚀 Starting training ({repeat}x per model)...\n")
+
+                if sub_choice == "2":
+                    print("\n🧠 Select models to train (comma-separated):")
+                    print(" [1] LSTM")
+                    print(" [2] CNN")
+                    print(" [3] Transformer")
+                    print(" [4] XGBoost")
+                    print(" [5] ARIMA")
+
+                    selected = input("🔢 Your choices (e.g., 1,3,5): ").strip()
+
+                    model_map = {
+                        "1": "LSTM",
+                        "2": "CNN",
+                        "3": "Transformer",
+                        "4": "XGBoost",
+                        "5": "ARIMA"
+                    }
+
+                    selected_models = [model_map.get(c.strip()) for c in selected.split(",") if c.strip() in model_map]
+                    if not selected_models:
+                        print("⚠️ No valid models selected.")
+                        return
+
+                    os.environ["SELECTED_MODELS"] = ",".join(selected_models)
+                else:
+                    os.environ.pop("SELECTED_MODELS", None)
+
                 subprocess.run([sys.executable, str(BASE_DIR / "src" / "train.py")], env=os.environ.copy())
 
         elif choice == "3":

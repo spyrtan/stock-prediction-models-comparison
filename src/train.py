@@ -10,14 +10,22 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 MODEL_DIR = BASE_DIR / "src" / "models"
 TEMP_DIR = BASE_DIR / "models" / "temp"
 
-# Available models and their scripts
-scripts = [
-    ("LSTM", MODEL_DIR / "lstm_model.py"),
-    ("CNN", MODEL_DIR / "cnn_model.py"),
-    ("ARIMA", MODEL_DIR / "arima_model.py"),
-    ("Transformer", MODEL_DIR / "transformer.py"),
-    ("XGBoost", MODEL_DIR / "xgboost_model.py")
-]
+# Map of available models and their script paths
+all_scripts = {
+    "LSTM": MODEL_DIR / "lstm_model.py",
+    "CNN": MODEL_DIR / "cnn_model.py",
+    "ARIMA": MODEL_DIR / "arima_model.py",
+    "Transformer": MODEL_DIR / "transformer.py",
+    "XGBoost": MODEL_DIR / "xgboost_model.py"
+}
+
+# Determine selected models from environment variable, if any
+selected_env = os.environ.get("SELECTED_MODELS")
+if selected_env:
+    selected_models = [name.strip() for name in selected_env.split(",") if name.strip() in all_scripts]
+    scripts = [(name, all_scripts[name]) for name in selected_models]
+else:
+    scripts = list(all_scripts.items())
 
 # Get number of training repetitions from environment
 try:
