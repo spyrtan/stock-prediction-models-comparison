@@ -7,7 +7,7 @@ from src import save_data
 from tensorflow.keras.models import load_model
 import xgboost as xgb
 import joblib
-
+from pathlib import Path
 
 def get_next_trading_day(start_date):
     holidays_2025 = [
@@ -19,7 +19,6 @@ def get_next_trading_day(start_date):
     while date.weekday() >= 5 or date in holidays:
         date += timedelta(days=1)
     return date
-
 
 def predict_next(model_name: str, ticker: str) -> float:
     raw_path = os.path.join("data", "raw", f"{ticker}_raw.csv")
@@ -49,10 +48,21 @@ def predict_next(model_name: str, ticker: str) -> float:
         print(f"📈 Forecast ({model_name}): {pred_value:.2f}")
         return float(pred_value)
 
-    scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(close_prices)
-    X_latest = np.array([scaled_data[-window_size:]])
+    # Load saved scaler
+    scaler_path = Path(model_dir) / f"{ticker}_scaler.save"
+    if not scaler_path.exists():
+        raise FileNotFoundError(f"Scaler file not found: {scaler_path}")
+    scaler = joblib.load(scaler_path)
 
+    # Prepare last window using loaded scaler
+    scaled_data = scaler.transform(close_prices)
+    X = []
+    for i in range(window_size, len(scaled_data)):
+        X.append(scaled_data[i - window_size:i])
+    X = np.array(X)
+    X_latest = np.array([X[-1]])
+
+    # Load model and predict
     if model_name == "LSTM":
         model = load_model(os.path.join(model_dir, f"{ticker}_lstm_model.keras"))
         pred_scaled = model.predict(X_latest)
@@ -77,7 +87,6 @@ def predict_next(model_name: str, ticker: str) -> float:
     pred_value = scaler.inverse_transform(pred_scaled)[0][0]
     print(f"📈 Forecast ({model_name}): {pred_value:.2f}")
     return float(pred_value)
-
 
 def save_prediction(ticker: str, model_name: str, predicted_value: float):
     result_dir = os.path.join("results", ticker)
@@ -106,7 +115,6 @@ def save_prediction(ticker: str, model_name: str, predicted_value: float):
     df_pred.to_csv(result_file, index=False)
 
     return result_file
-
 
 def update_actuals(ticker: str, model_name: str):
     result_file = os.path.join("results", ticker, f"{model_name.lower()}_predictions.csv")

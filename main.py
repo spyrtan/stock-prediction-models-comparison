@@ -39,7 +39,7 @@ def ensure_data_exists(ticker):
                     window_size=window_size
                 )
                 save_data.save_raw_data(series, ticker)
-                save_data.save_processed_data(X_train, y_train, X_test, y_test, ticker)
+                save_data.save_processed_data(X_train, y_train, X_test, y_test, scaler, ticker)
             except Exception as e:
                 print(f"❌ Error while preparing data: {e}")
                 return False
@@ -100,7 +100,7 @@ def main():
             from src.preprocess import prepare_from_series
             close_prices = df["Close"].values.reshape(-1, 1)
             X_train, y_train, X_test, y_test, scaler = prepare_from_series(close_prices, window_size=30)
-            save_data.save_processed_data(X_train, y_train, X_test, y_test, ticker)
+            save_data.save_processed_data(X_train, y_train, X_test, y_test, scaler, ticker)
             print("✅ Processed data saved to data/processed/")
 
         elif choice == "2":

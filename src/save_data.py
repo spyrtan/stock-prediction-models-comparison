@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
+import joblib  # nowo dodane do zapisu scalera
 
 # Define the root directory of the project dynamically
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -8,10 +9,12 @@ PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 RAW_DIR = os.path.join(DATA_DIR, "raw")
 PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
+MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 
 # Ensure required directories exist
 os.makedirs(RAW_DIR, exist_ok=True)
 os.makedirs(PROCESSED_DIR, exist_ok=True)
+os.makedirs(MODELS_DIR, exist_ok=True)
 
 def save_raw_data(data, ticker):
     """
@@ -52,9 +55,10 @@ def save_raw_data(data, ticker):
     print(f"📄 File name: {file_name}")
     print(f"📂 Full path: {file_path}")
 
-def save_processed_data(X_train, y_train, X_test, y_test, ticker):
+def save_processed_data(X_train, y_train, X_test, y_test, scaler, ticker):
     """
     Save processed training and testing datasets as .npy files.
+    Also saves the MinMaxScaler used for normalization.
     """
     ticker_dir = os.path.join(PROCESSED_DIR, ticker)
     os.makedirs(ticker_dir, exist_ok=True)
@@ -64,4 +68,9 @@ def save_processed_data(X_train, y_train, X_test, y_test, ticker):
     np.save(os.path.join(ticker_dir, "X_test.npy"), X_test)
     np.save(os.path.join(ticker_dir, "y_test.npy"), y_test)
 
+    # Save the scaler to models/ directory
+    scaler_path = os.path.join(MODELS_DIR, f"{ticker}_scaler.save")
+    joblib.dump(scaler, scaler_path)
+
     print(f"✅ Processed data saved to {ticker_dir}")
+    print(f"💾 Scaler saved to {scaler_path}")

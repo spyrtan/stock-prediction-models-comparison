@@ -8,6 +8,7 @@ import os
 import json
 from pathlib import Path
 from sklearn.metrics import mean_squared_error
+import joblib  # ⬅️ to save scaler
 
 # Load environment variables
 TICKER = os.environ.get("TICKER", "AAPL")
@@ -18,6 +19,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data" / "processed" / TICKER
 MODEL_DIR = BASE_DIR / "models"
 TEMP_DIR = MODEL_DIR / "temp"
+SCALER_PATH = MODEL_DIR / f"{TICKER}_scaler.save"
 
 # Ensure directories exist
 os.makedirs(MODEL_DIR, exist_ok=True)
@@ -61,3 +63,13 @@ try:
     print(f"📄 MSE and model path written to {mse_output_path}")
 except Exception as e:
     print(f"❌ Failed to write JSON: {e}")
+
+# OPTIONAL: Save scaler passed from train.py
+scaler_var = os.environ.get("SCALER_OBJ")
+if scaler_var and os.path.exists(scaler_var):
+    try:
+        scaler = joblib.load(scaler_var)
+        joblib.dump(scaler, SCALER_PATH)
+        print(f"📦 Scaler saved to {SCALER_PATH}")
+    except Exception as e:
+        print(f"❌ Failed to save scaler: {e}")

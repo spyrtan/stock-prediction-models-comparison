@@ -9,6 +9,7 @@ import json
 BASE_DIR = Path(__file__).resolve().parents[1]
 MODEL_DIR = BASE_DIR / "src" / "models"
 TEMP_DIR = BASE_DIR / "models" / "temp"
+SCALER_PATH = BASE_DIR / "models" / f"{os.environ.get('TICKER', 'MODEL')}_scaler.save"
 
 # Map of available models and their script paths
 all_scripts = {
@@ -41,6 +42,13 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 
 print(f"\n🚀 Starting training ({num_repeats}x per model)...\n")
 
+# Inform about scaler availability
+if SCALER_PATH.exists():
+    print(f"📦 Using cached scaler from {SCALER_PATH}")
+else:
+    print("ℹ️ No scaler found yet — will wait for model scripts to create it.")
+
+# Train models
 for name, script_path in scripts:
     print(f"\n================ {name} =================")
 
@@ -51,11 +59,14 @@ for name, script_path in scripts:
     for i in range(num_repeats):
         print(f"\n🔄 Training round {i+1}/{num_repeats} for {name}")
 
-        # Prepare environment for subprocess
         env = os.environ.copy()
         env["MODEL_TEMP_SUFFIX"] = f"__temp_run_{i+1}"
         env["PYTHONPATH"] = str(BASE_DIR)
         env["TEMP_DIR_OVERRIDE"] = str(TEMP_DIR)
+
+        # Pass scaler path if available
+        if SCALER_PATH.exists():
+            env["SCALER_OBJ"] = str(SCALER_PATH)
 
         try:
             subprocess.run([sys.executable, str(script_path)], check=True, env=env)
@@ -89,7 +100,6 @@ for name, script_path in scripts:
         shutil.copy(best_model_path, final_model_path)
         print(f"✅ Best model for {name} saved to: {final_model_path}")
 
-        # For ARIMA also copy predictions CSV
         if name == "ARIMA" and best_run_index is not None:
             pred_src = TEMP_DIR / f"{os.environ.get('TICKER', 'MODEL')}_arima_predictions__temp_run_{best_run_index}.csv"
             pred_dst = BASE_DIR / "models" / f"{os.environ.get('TICKER', 'MODEL')}_arima_predictions.csv"
@@ -99,7 +109,7 @@ for name, script_path in scripts:
     else:
         print(f"⚠️ No valid model was saved for {name}")
 
-# Clean up temporary directory
+# Clean up temp files
 shutil.rmtree(TEMP_DIR, ignore_errors=True)
 
 print("\n✅ Training process complete.")
