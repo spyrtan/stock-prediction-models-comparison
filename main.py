@@ -52,7 +52,7 @@ def main():
     BASE_DIR = Path(__file__).resolve().parent
 
     while True:
-        print("\n🧠 === STOCK PREDICTION CLI ===")
+        print("\n🧑‍🧠 === STOCK PREDICTION CLI ===")
         print("📅 Current time:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
         print("\n📁 Data management:")
@@ -67,7 +67,7 @@ def main():
         print("\n❌ Exit:")
         print(" [Q] Quit program")
 
-        choice = input("\n🔢 Your choice: ").strip().upper()
+        choice = input("\n🔹 Your choice: ").strip().upper()
 
         if choice == "Q":
             print("👋 Exiting the program. Goodbye!")
@@ -99,7 +99,7 @@ def main():
 
             from src.preprocess import prepare_from_series
             close_prices = df["Close"].values.reshape(-1, 1)
-            X_train, y_train, X_test, y_test, scaler = prepare_from_series(close_prices, window_size=30)
+            X_train, y_train, X_test, y_test, scaler = prepare_from_series(close_prices, window_size=90)
             save_data.save_processed_data(X_train, y_train, X_test, y_test, scaler, ticker)
             print("✅ Processed data saved to data/processed/")
 
@@ -125,7 +125,7 @@ def main():
                 os.environ["TRAIN_REPEAT"] = str(repeat)
 
                 if sub_choice == "2":
-                    print("\n🧠 Select models to train (comma-separated):")
+                    print("\n🧑‍🧠 Select models to train (comma-separated):")
                     print(" [1] LSTM")
                     print(" [2] CNN")
                     print(" [3] Transformer")
@@ -165,8 +165,9 @@ def main():
             print(" [3] Transformer  → Attention-based model")
             print(" [4] XGBoost      → Gradient boosting")
             print(" [5] ARIMA        → Autoregressive model")
+            print(" [A] All models")
 
-            model_choice = input("🔢 Your choice: ").strip()
+            model_choice = input("🔢 Your choice: ").strip().upper()
 
             model_map = {
                 "1": "LSTM",
@@ -176,21 +177,38 @@ def main():
                 "5": "ARIMA"
             }
 
-            if model_choice not in model_map:
+            if model_choice == "A":
+                predictions = {}
+                for model_name in model_map.values():
+                    try:
+                        predicted_value = predict_next(model_name, ticker)
+                        predictions[model_name] = predicted_value
+                        print(f"\n🎯 Predicted closing price using {model_name}: {predicted_value:.2f}")
+                    except Exception as e:
+                        print(f"❌ {model_name} prediction error: {e}")
+
+                save_all = input("\n💾 Save all predictions to files? (Y/N): ").strip().upper()
+                if save_all == "Y":
+                    for model_name, predicted_value in predictions.items():
+                        try:
+                            path = save_prediction(ticker, model_name, predicted_value)
+                            print(f"✅ Prediction saved to: {path}")
+                        except Exception as e:
+                            print(f"❌ Error saving {model_name}: {e}")
+
+            elif model_choice in model_map:
+                model_name = model_map[model_choice]
+                try:
+                    predicted_value = predict_next(model_name, ticker)
+                    print(f"\n🎯 Predicted closing price using {model_name}: {predicted_value:.2f}")
+                    save = input("💾 Save prediction to file? (Y/N): ").strip().upper()
+                    if save == "Y":
+                        path = save_prediction(ticker, model_name, predicted_value)
+                        print(f"✅ Prediction saved to: {path}")
+                except Exception as e:
+                    print(f"❌ Prediction error: {e}")
+            else:
                 print("❌ Invalid model selection.")
-                continue
-
-            model_name = model_map[model_choice]
-
-            try:
-                predicted_value = predict_next(model_name, ticker)
-                print(f"\n🎯 Predicted closing price using {model_name}: {predicted_value:.2f}")
-                save = input("💾 Save prediction to file? (Y/N): ").strip().upper()
-                if save == "Y":
-                    path = save_prediction(ticker, model_name, predicted_value)
-                    print(f"✅ Prediction saved to: {path}")
-            except Exception as e:
-                print(f"❌ Prediction error: {e}")
 
         elif choice == "5":
             print("\n📊 Select model to update actual prices:")
@@ -199,7 +217,8 @@ def main():
             print(" [3] Transformer")
             print(" [4] XGBoost")
             print(" [5] ARIMA")
-            model_choice = input("🔢 Your choice: ").strip()
+            print(" [A] All models")
+            model_choice = input("🔢 Your choice: ").strip().upper()
 
             model_map = {
                 "1": "LSTM",
@@ -209,12 +228,15 @@ def main():
                 "5": "ARIMA"
             }
 
-            if model_choice not in model_map:
+            if model_choice == "A":
+                for model_name in model_map.values():
+                    print(f"\n🔁 Updating {model_name}...")
+                    update_actuals(ticker, model_name)
+            elif model_choice in model_map:
+                model_name = model_map[model_choice]
+                update_actuals(ticker, model_name)
+            else:
                 print("❌ Invalid model selection.")
-                continue
-
-            model_name = model_map[model_choice]
-            update_actuals(ticker, model_name)
 
 if __name__ == "__main__":
     main()

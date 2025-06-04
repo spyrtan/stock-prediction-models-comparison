@@ -27,16 +27,16 @@ def predict_next(model_name: str, ticker: str) -> float:
     df = df.sort_values("Date")
     df = df[["Date", "Close"]].dropna()
     df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
-    save_data.save_raw_data(df, ticker)
 
     close_prices = df["Close"].values.reshape(-1, 1)
-    window_size = 30
+    window_size = 90  # <-- updated from 30 to 90
 
     if len(close_prices) < window_size:
         raise ValueError("Not enough data for prediction.")
 
     model_dir = "models"
 
+    # === ARIMA model (log + exp for scaling) ===
     if model_name == "ARIMA":
         log_series = np.log(df["Close"].values)
         model_path = os.path.join(model_dir, f"{ticker}_arima_model.pkl")
@@ -48,21 +48,19 @@ def predict_next(model_name: str, ticker: str) -> float:
         print(f"📈 Forecast ({model_name}): {pred_value:.2f}")
         return float(pred_value)
 
-    # Load saved scaler
+    # === Load 1D scaler for 'Close' only ===
     scaler_path = Path(model_dir) / f"{ticker}_scaler.save"
     if not scaler_path.exists():
         raise FileNotFoundError(f"Scaler file not found: {scaler_path}")
     scaler = joblib.load(scaler_path)
 
-    # Prepare last window using loaded scaler
-    scaled_data = scaler.transform(close_prices)
-    X = []
-    for i in range(window_size, len(scaled_data)):
-        X.append(scaled_data[i - window_size:i])
-    X = np.array(X)
-    X_latest = np.array([X[-1]])
+    # Scale Close values
+    scaled_close = scaler.transform(close_prices)
 
-    # Load model and predict
+    # Create the last window for prediction
+    X_latest = np.array([scaled_close[-window_size:]])
+
+    # === Load model and predict ===
     if model_name == "LSTM":
         model = load_model(os.path.join(model_dir, f"{ticker}_lstm_model.keras"))
         pred_scaled = model.predict(X_latest)
@@ -84,6 +82,7 @@ def predict_next(model_name: str, ticker: str) -> float:
     else:
         raise ValueError("Unknown model name.")
 
+    # Inverse-transform the prediction to original Close scale
     pred_value = scaler.inverse_transform(pred_scaled)[0][0]
     print(f"📈 Forecast ({model_name}): {pred_value:.2f}")
     return float(pred_value)
@@ -135,7 +134,7 @@ def update_actuals(ticker: str, model_name: str):
     raw_df["Date"] = pd.to_datetime(raw_df["Date"])
     raw_df = raw_df.set_index("Date")
 
-    print(f"📥 Updating actual closing prices for {ticker} from local data...")
+    print(f"🗕️ Updating actual closing prices for {ticker} from local data...")
     updated = 0
 
     for i, row in df.iterrows():
@@ -157,6 +156,6 @@ def update_actuals(ticker: str, model_name: str):
         axis=1
     )
     df.to_csv(result_file, index=False)
-    print(f"💾 File updated: {result_file}")
+    print(f"🗕️ File updated: {result_file}")
     if updated == 0:
         print("ℹ️ No actual values were updated. Check if raw data contains matching dates.")

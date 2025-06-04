@@ -29,7 +29,7 @@ def prepare_data(ticker, start, end, interval="1d", window_size=30):
     X = np.array(X)
     y = np.array(y)
 
-    split_index = int(len(X) * 0.8)
+    split_index = int(len(X) * 0.9)  # changed from 0.8 to 0.9
     X_train, y_train = X[:split_index], y[:split_index]
     X_test, y_test = X[split_index:], y[split_index:]
 
@@ -39,7 +39,6 @@ def prepare_data(ticker, start, end, interval="1d", window_size=30):
     joblib.dump(scaler, scaler_path)
 
     return X_train, y_train, X_test, y_test, scaler, df
-
 
 def prepare_from_series(close_prices, window_size=30):
     """
@@ -60,7 +59,7 @@ def prepare_from_series(close_prices, window_size=30):
     X = np.array(X)
     y = np.array(y)
 
-    split_index = int(len(X) * 0.8)
+    split_index = int(len(X) * 0.9)  # changed from 0.8 to 0.9
     X_train = X[:split_index]
     y_train = y[:split_index]
     X_test = X[split_index:]

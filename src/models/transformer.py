@@ -4,7 +4,7 @@ if sys.stdout.encoding != "utf-8":
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras import layers, models
+from tensorflow.keras import layers, models, callbacks
 import os
 import json
 from pathlib import Path
@@ -29,7 +29,7 @@ y_test = np.load(DATA_DIR / "y_test.npy")
 
 input_shape = X_train.shape[1:]
 
-def transformer_encoder(inputs, head_size, num_heads, ff_dim, dropout=0.2):
+def transformer_encoder(inputs, head_size, num_heads, ff_dim, dropout=0.1):
     x = layers.MultiHeadAttention(key_dim=head_size, num_heads=num_heads, dropout=dropout)(inputs, inputs)
     x = layers.Dropout(dropout)(x)
     x = layers.LayerNormalization(epsilon=1e-6)(x)
@@ -48,12 +48,10 @@ def build_model(input_shape):
     pos_embedding = tf.expand_dims(pos_embedding, axis=0)
     x = layers.Add()([inputs, pos_embedding])
 
-    for _ in range(4):  # 4 Transformer blocks
-        x = transformer_encoder(x, head_size=64, num_heads=8, ff_dim=128, dropout=0.2)
+    for _ in range(2):  # zmniejszono z 4 do 2 warstw
+        x = transformer_encoder(x, head_size=64, num_heads=2, ff_dim=64, dropout=0.1)  # zmniejszono głowy i FF dim
 
     x = layers.GlobalAveragePooling1D()(x)
-    x = layers.Dense(128, activation="relu")(x)
-    x = layers.Dropout(0.3)(x)
     x = layers.Dense(64, activation="relu")(x)
     x = layers.Dropout(0.2)(x)
     outputs = layers.Dense(1)(x)
@@ -61,10 +59,30 @@ def build_model(input_shape):
     return models.Model(inputs, outputs)
 
 model = build_model(input_shape)
-model.compile(loss="mse", optimizer="adam")
+model.compile(
+    loss="mse",
+    optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4)
+)
 
 print("\n🚀 Starting Transformer training...")
-model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=300, batch_size=32)
+
+callbacks_list = [
+    callbacks.EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True),
+    callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=5, verbose=1),
+    callbacks.ModelCheckpoint(
+        filepath=str(TEMP_DIR / "best_transformer.keras"),
+        monitor="val_loss", save_best_only=True
+    )
+]
+
+history = model.fit(
+    X_train, y_train,
+    validation_data=(X_test, y_test),
+    epochs=400,
+    batch_size=32,
+    callbacks=callbacks_list,
+    verbose=1
+)
 
 mse = model.evaluate(X_test, y_test)
 print(f"\n📉 Test MSE: {mse:.6f}")
@@ -74,7 +92,7 @@ model_path = TEMP_DIR / model_filename if SUFFIX else MODEL_DIR / model_filename
 
 try:
     model.save(model_path)
-    print(f"💾 Model saved to {model_path}")
+    print(f"📅 Model saved to {model_path}")
 except Exception as e:
     print(f"❌ Failed to save model: {e}")
 

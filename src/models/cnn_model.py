@@ -42,7 +42,7 @@ model.compile(optimizer='adam', loss='mean_squared_error')
 
 # Train the model for 100 epochs
 print("\n🚀 Starting CNN training for 100 epochs...")
-model.fit(X_train, y_train, epochs=100, batch_size=32, validation_data=(X_test, y_test))
+model.fit(X_train, y_train, epochs=300, batch_size=32, validation_data=(X_test, y_test))
 
 # Evaluate the model
 mse = model.evaluate(X_test, y_test)
